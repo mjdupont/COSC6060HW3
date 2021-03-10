@@ -370,14 +370,14 @@ int main(int argc, char **argv)
     switch (verbosity) {
       case v_terse: 
       {
-        printf("%i,%i,%f,%f,%f\n", numProcs, numPolynomials, variable, result, elapsed_time);
+        printf("%i,%i,%i,%f,%f,%f\n", numProcs, numPolynomials, chunkSize, variable, result, elapsed_time);
         break;
       }
       case v_veryTerse: 
       {
         int i;
         for (i = 0; i < numProcs; i++) {
-          printf("%i,%i,%f,%f,%i,%f\n", numProcs, numPolynomials, variable, result, i, times[i]);
+          printf("%i,%i,%i,%f,%f,%i,%f\n", numProcs, numPolynomials, chunkSize, variable, result, i, times[i]);
         }
         break;
       }
