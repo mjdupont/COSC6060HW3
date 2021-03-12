@@ -27,7 +27,7 @@
 // mpicc DLBPolyEvaluation.c
 // mpirun -np 3 ./a.out
 
-// Two tags to distinguish work messages from process-termination messages
+// multiple tags to distinguish work messages from process-termination messages
 #define WORKTAG 1
 #define DIETAG 2
 #define FINALTAG 3
@@ -230,6 +230,30 @@ void worker(double x, int chunkSize, int verbosity)
   free(term);
 }
  
+
+void showUsage(char* arg0) {
+  printf("\n------------------------------------------------------------------\n");
+  printf("Calculates the value of a polynomial with -p terms (default 50000),\n");
+  printf("with coefficients of 1 and variable of -v (default .99). Exponents \n");
+  printf("correspond to coefficient array indices.\n\n");
+  printf("Usage: %s [OPTION]\n", arg0);
+  printf("  -h, --help\n");
+  printf("    Displays information about how to use this function.\n");
+  printf("  -v, --variable\n");
+  printf("    The variable to be multiplied in the polynomial. Default .99.\n");
+  printf("  -p, --polySize\n");
+  printf("    The length of the polynomial in terms. Default 50000.\n");
+  printf("  -v|-d|-t|-y|-w, --verbose|--descriptive|--terse|--terse2|--veryVerbose\n");
+  printf("    Specify verbosity, from verbose to terse. \n");
+  printf("    Default is --descriptive.\n");
+  printf("    --veryVerbose provides even more extensive information.\n");
+  printf("    --verbose is intended for debugging and additional logging.\n");
+  printf("    --terse produces only csv-ready lines, with maximum clock time.\n");
+  printf("    --terse2 produces only csv-ready lines, with clock times per \n");
+  printf("      processor.\n");
+  printf("    If multiple are specified, the rightmost is used. \n");
+  printf("\n------------------------------------------------------------------\n");
+}
 
 //Populates the provided buffer with timings from each proc, with index = procnum.
 void aggregateDetailedTimings(int rank, int numProcs, double elapsed_time, double* buffer) {
