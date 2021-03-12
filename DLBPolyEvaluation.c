@@ -293,6 +293,13 @@ void aggregateDetailedTimings(int rank, int numProcs, double elapsed_time, doubl
 // Driver Code
 int main(int argc, char **argv)
 {
+  MPI_Init(&argc, &argv);
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  int numProcs;
+  MPI_Comm_size(MPI_COMM_WORLD, &numProcs);
+  
+  
   //Default values
   int chunkSize = 10;
   int numPolynomials = 50000;
@@ -329,8 +336,9 @@ int main(int argc, char **argv)
     {
       //Usage
       case 'h': 
-        printf("TODO\n");
-        break;
+        if (rank == 1) showUsage(argv[0]);
+        MPI_Finalize();
+        return 0;
       //Parameters
       case 'p':
         numPolynomials = atoi(optarg);
@@ -369,11 +377,6 @@ int main(int argc, char **argv)
   
   initialize(coeffArr, numPolynomials);
   
-  MPI_Init(&argc, &argv);
-  int rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  int numProcs;
-  MPI_Comm_size(MPI_COMM_WORLD, &numProcs);
 
   if (verbosity > v_terse && rank == 0) printf("Evaluating a polynomial of %i terms, in chunks of %i elements, with %i processes\n", numPolynomials, chunkSize, numProcs);
   
