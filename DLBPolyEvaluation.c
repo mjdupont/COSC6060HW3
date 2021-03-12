@@ -37,7 +37,7 @@
 // MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status)
 // MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm)
 
-enum verbosity { v_veryVerbose=20, v_verbose=10, v_descriptive=0, v_terse=-10, v_veryTerse=-20 };
+enum verbosity { v_veryVerbose=20, v_verbose=10, v_descriptive=0, v_terse=-10, v_veryTerse=-20};
 
 double power(double x, int degree)
 {     
@@ -72,7 +72,7 @@ double evaluateTerms(int* terms, int termLength, double x, int verbosity)
     localTotal += evaluateTerm(coefficient, degree, x, verbosity);
   }
 
-  if (verbosity > v_descriptive) {
+  if (verbosity > v_verbose) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     printf("Thread %.2i - Chunk of size %i produced total %f\n", rank, termLength, localTotal);
@@ -168,8 +168,15 @@ double queueMaster(int coeffArr[], int numPolynomials, int chunkSize, int verbos
 
   if (verbosity > v_terse) printf("Master - Sending die tags...\n");
   // Send (tag = DIETAG) to all workers
+
   for(workerRank = 1; workerRank < numProcs; workerRank++)
   {
+    if (verbosity > v_descriptive) {
+      int rank;
+      MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+      printf("Master - Sending Die Tag to %i! \n", workerRank);
+      fflush(stdout);
+    }
     // Receive all outstanding work.
     MPI_Recv(&termAnswer, 1, MPI_DOUBLE, MPI_ANY_SOURCE, WORKTAG, MPI_COMM_WORLD, &status);
     totalResult += termAnswer;
@@ -199,15 +206,21 @@ void worker(double x, int chunkSize, int verbosity)
   while(1)
   { 
     MPI_Recv(term, 2*chunkSize, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+    // If given a FINALTAG, will listen for the length of a truncated message then listen for that message.
     if(status.MPI_TAG == FINALTAG)
     {
+      if (verbosity > v_descriptive) {
+        int rank;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        printf("Thread %.2i - Received Final chunk! \n", rank, elapsed_time);
+        fflush(stdout);
+      }
       int remainingLength;
       MPI_Recv(&remainingLength, 1, MPI_INT, 0, LENGTHTAG, MPI_COMM_WORLD, &status);
       MPI_Recv(term, 2*remainingLength, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
       double answer = evaluateTerms(term, remainingLength, x, verbosity);
       MPI_Send(&answer, 1, MPI_DOUBLE, 0, WORKTAG, MPI_COMM_WORLD);
-    }
-    if(status.MPI_TAG == DIETAG)
+    } else if(status.MPI_TAG == DIETAG)
     {
       // End timer 
       elapsed_time = elapsed_time + MPI_Wtime();
