@@ -51,13 +51,14 @@ double power(double x, int degree)
 // to be called from worker process
 double evaluateTerm(int coefficient, int degree, double x, int verbosity)
 {
+  double result = coefficient * power(x, degree);
   if (verbosity > v_verbose) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    printf("Thread %.2i - degree %i coeff %i value %0.2f \n", rank, degree, coefficient, x);
+    printf("Thread %.2i - degree %i coeff %i value %0.2f result %0.2f\n", rank, degree, coefficient, x, result);
     fflush(stdout);
   }
-  return coefficient * power(x, degree);
+  return result;
 }
 
 double evaluateTerms(int* terms, int termLength, double x, int verbosity)
@@ -112,12 +113,34 @@ void packAndSendTerm(int coeffArr[], int coeffLength, int* coeffPosition, int te
 
   int i;
   for (i = 0; i < termLength; i++){
+    if (*coeffPosition >= coeffLength) break;
     term[2*i] = *coeffPosition;               // degree
     term[2*i+1] = coeffArr[*coeffPosition];   // coefficient
     (*coeffPosition) ++;
-    if (*coeffPosition >= coeffLength) break;
   }
   MPI_Send(term, 2 * termLength, MPI_INT, targetWorker, WORKTAG, MPI_COMM_WORLD); 
+}
+
+void dispatchChunk(int coeffArr[], int coeffLength, int* coeffPosition, int term[], int termLength, int targetWorker, int verbosity)
+{
+  if (*coeffPosition == coeffLength) {
+    bzero(term, sizeof(int)*2*termLength);
+    packAndSendTerm(coeffArr, coeffLength, coeffPosition, term, termLength, targetWorker, verbosity);
+  //If coeffLength is not a multiple of termLength, we need to specially handle the last values.
+  } else if (*coeffPosition > (coeffLength - termLength)) {
+    int remainingTerms = (coeffLength - *coeffPosition);
+    if (verbosity > v_terse) printf("Master - Position = %i; Sending %i final values...\n", *coeffPosition, remainingTerms);
+    bzero(term, sizeof(int)*2*termLength);
+    //Send dummy message with FINALTAG
+    MPI_Send(term, 2* termLength, MPI_INT, targetWorker, FINALTAG, MPI_COMM_WORLD);
+    //Send length of final truncated message
+    MPI_Send(&remainingTerms, 1, MPI_INT, targetWorker, LENGTHTAG, MPI_COMM_WORLD);
+    //Send final truncated term.
+    packAndSendTerm(coeffArr, coeffLength, coeffPosition, term, remainingTerms, targetWorker, verbosity);
+    if (verbosity > v_terse) printf("Master - Finished sending final values...\n");
+  } else {
+    packAndSendTerm(coeffArr, coeffLength, coeffPosition, term, termLength, targetWorker, verbosity);
+  }
 }
 
 double queueMaster(int coeffArr[], int numPolynomials, int chunkSize, int verbosity)
@@ -135,7 +158,7 @@ double queueMaster(int coeffArr[], int numPolynomials, int chunkSize, int verbos
   //seed initial workloads
   for(workerRank = 1; workerRank < numProcs; workerRank++)
   { 
-    packAndSendTerm(coeffArr, numPolynomials, &tCount, term, chunkSize, workerRank, verbosity);
+    dispatchChunk(coeffArr, numPolynomials, &tCount, term, chunkSize, workerRank, verbosity);
   }
 
   if (verbosity > v_terse) printf("Master - Sending work from queue...\n");
@@ -149,21 +172,8 @@ double queueMaster(int coeffArr[], int numPolynomials, int chunkSize, int verbos
     // Send new results to workers.
     workerRank = status.MPI_SOURCE;
 
-    //If numPolynomials is not a multiple of chunkSize, we need to specially handle the last values.
-    if (tCount > (numPolynomials - chunkSize)) {
-      int remainingTerms = (numPolynomials - tCount);
-      if (verbosity > v_terse) printf("Master - Position = %i; Sending %i final values...\n", tCount, remainingTerms);
-      bzero(term, sizeof(int)*2*chunkSize);
-      //Send dummy message with FINALTAG
-      MPI_Send(term, 2* chunkSize, MPI_INT, workerRank, FINALTAG, MPI_COMM_WORLD);
-      //Send length of final truncated message
-      MPI_Send(&remainingTerms, 1, MPI_INT, workerRank, LENGTHTAG, MPI_COMM_WORLD);
-      //Send final truncated term.
-      packAndSendTerm(coeffArr, numPolynomials, &tCount, term, remainingTerms, workerRank, verbosity);
-      if (verbosity > v_terse) printf("Master - Finished sending final values...\n");
-    } else {
-      packAndSendTerm(coeffArr, numPolynomials, &tCount, term, chunkSize, workerRank, verbosity);
-    }
+    dispatchChunk(coeffArr, numPolynomials, &tCount, term, chunkSize, workerRank, verbosity);
+
   }
 
   if (verbosity > v_terse) printf("Master - Sending die tags...\n");
